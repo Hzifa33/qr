@@ -170,10 +170,43 @@ export default function QRGenerator() {
       }
 
       const qrDataURL = await QRCode.toDataURL(dataToEncode, options)
-      setQrCode(qrDataURL)
 
-      if (canvasRef.current && qrStyle !== "minimal") {
-        applyArtisticEffects(qrDataURL)
+      if (logoPreview && canvasRef.current) {
+        const canvas = canvasRef.current
+        const ctx = canvas.getContext("2d")
+        if (ctx) {
+          const img = new Image()
+          img.onload = () => {
+            canvas.width = size[0]
+            canvas.height = size[0]
+            ctx.drawImage(img, 0, 0, size[0], size[0])
+
+            const logoImg = new Image()
+            logoImg.crossOrigin = "anonymous"
+            logoImg.onload = () => {
+              const logoSize = size[0] * 0.15
+              const logoX = (size[0] - logoSize) / 2
+              const logoY = (size[0] - logoSize) / 2
+
+              ctx.fillStyle = "white"
+              ctx.beginPath()
+              ctx.arc(size[0] / 2, size[0] / 2, logoSize / 2 + 5, 0, 2 * Math.PI)
+              ctx.fill()
+
+              ctx.drawImage(logoImg, logoX, logoY, logoSize, logoSize)
+
+              const finalDataURL = canvas.toDataURL("image/png")
+              setQrCode(finalDataURL)
+            }
+            logoImg.src = logoPreview
+          }
+          img.src = qrDataURL
+        }
+      } else {
+        setQrCode(qrDataURL)
+        if (canvasRef.current && qrStyle !== "minimal") {
+          applyArtisticEffects(qrDataURL)
+        }
       }
     } catch (error) {
       console.error("Error generating QR code:", error)
@@ -219,8 +252,6 @@ export default function QRGenerator() {
       }
 
       ctx.drawImage(img, 0, 0, size[0], size[0])
-      const newDataURL = canvas.toDataURL("image/png")
-      setQrCode(newDataURL)
     }
     img.src = qrDataURL
   }
@@ -248,7 +279,20 @@ export default function QRGenerator() {
 
   useEffect(() => {
     generateQR()
-  }, [qrType, qrData, qrStyle, errorLevel, size, margin, wifiData, vcardData, emailData, smsData, socialData])
+  }, [
+    qrType,
+    qrData,
+    qrStyle,
+    errorLevel,
+    size,
+    margin,
+    wifiData,
+    vcardData,
+    emailData,
+    smsData,
+    socialData,
+    logoPreview,
+  ])
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-muted/20 to-accent/5">
