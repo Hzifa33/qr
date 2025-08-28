@@ -16,7 +16,6 @@ import {
   Upload,
   Settings,
   Sparkles,
-  Camera,
   ImageIcon,
   Globe,
   Wifi,
@@ -30,7 +29,6 @@ import {
   Waves,
   Target,
   Grid3X3,
-  X,
   FileImage,
 } from "lucide-react"
 import QRCode from "qrcode"
@@ -91,12 +89,8 @@ export default function QRGenerator() {
   const [smsData, setSmsData] = useState({ phone: "", message: "" })
   const [socialData, setSocialData] = useState({ platform: "instagram", username: "" })
 
-  const [isScanning, setIsScanning] = useState(false)
   const [scannedResult, setScannedResult] = useState("")
   const [scanError, setScanError] = useState("")
-  const videoRef = useRef<HTMLVideoElement>(null)
-  const streamRef = useRef<MediaStream | null>(null)
-  const scanIntervalRef = useRef<NodeJS.Timeout | null>(null)
 
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
@@ -287,70 +281,6 @@ export default function QRGenerator() {
     link.click()
   }
 
-  const startScanning = async () => {
-    try {
-      setScanError("")
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment" },
-      })
-
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream
-        streamRef.current = stream
-        setIsScanning(true)
-
-        // Start scanning for QR codes
-        scanIntervalRef.current = setInterval(() => {
-          scanQRFromVideo()
-        }, 500)
-      }
-    } catch (error) {
-      setScanError("Camera access denied or not available")
-      console.error("Camera error:", error)
-    }
-  }
-
-  const stopScanning = () => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop())
-      streamRef.current = null
-    }
-
-    if (scanIntervalRef.current) {
-      clearInterval(scanIntervalRef.current)
-      scanIntervalRef.current = null
-    }
-
-    setIsScanning(false)
-  }
-
-  const scanQRFromVideo = () => {
-    if (!videoRef.current) return
-
-    const video = videoRef.current
-    const canvas = document.createElement("canvas")
-    const ctx = canvas.getContext("2d")
-
-    if (!ctx) return
-
-    canvas.width = video.videoWidth
-    canvas.height = video.videoHeight
-    ctx.drawImage(video, 0, 0)
-
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
-
-    try {
-      const qrData = detectQRFromImageData(imageData)
-      if (qrData) {
-        setScannedResult(qrData)
-        handleQRAction(qrData)
-        stopScanning()
-      }
-    } catch (error) {
-      // Continue scanning
-    }
-  }
-
   const detectQRFromImageData = (imageData: ImageData): string | null => {
     try {
       const code = jsQR(imageData.data, imageData.width, imageData.height, {
@@ -367,6 +297,7 @@ export default function QRGenerator() {
     const file = event.target.files?.[0]
     if (!file) return
 
+    setScanError("")
     const reader = new FileReader()
     reader.onload = (e) => {
       const img = new Image()
@@ -392,6 +323,25 @@ export default function QRGenerator() {
       img.src = e.target?.result as string
     }
     reader.readAsDataURL(file)
+  }
+
+  const handleDragOver = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault()
+  }
+
+  const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    const files = event.dataTransfer.files
+    if (files.length > 0) {
+      const file = files[0]
+      if (file.type.startsWith("image/")) {
+        // Create a synthetic event to reuse handleImageUpload logic
+        const syntheticEvent = {
+          target: { files: [file] },
+        } as React.ChangeEvent<HTMLInputElement>
+        handleImageUpload(syntheticEvent)
+      }
+    }
   }
 
   const handleQRAction = (qrData: string) => {
@@ -841,86 +791,26 @@ export default function QRGenerator() {
             <Card className="bg-card/80 backdrop-blur-sm border-border/50">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Camera className="w-5 h-5 text-primary" />
+                  <FileImage className="w-5 h-5 text-primary" />
                   QR Scanner
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {!isScanning ? (
-                  <div className="space-y-3">
-                    <Button onClick={startScanning} className="w-full" size="lg">
-                      <Camera className="w-4 h-4 mr-2" />
-                      Start Camera Scan
-                    </Button>
-
-                    <div className="relative">
-                      <Button variant="outline" className="w-full bg-transparent" size="lg" asChild>
-                        <label className="cursor-pointer">
-                          <FileImage className="w-4 h-4 mr-2" />
-                          Upload Image
-                          <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
-                        </label>
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    <div className="relative aspect-square bg-black rounded-lg overflow-hidden border-2 border-primary/20">
-                      <video
-                        ref={videoRef}
-                        autoPlay
-                        playsInline
-                        muted
-                        className="w-full h-full object-cover"
-                        style={{ transform: "scaleX(-1)" }} // Mirror the video for better UX
-                      />
-
-                      {/* Scanning overlay with animated frame */}
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        {/* Dark overlay with transparent center */}
-                        <div className="absolute inset-0 bg-black/40">
-                          <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-48 h-48 bg-transparent border-2 border-transparent"></div>
-                        </div>
-
-                        {/* Scanning frame */}
-                        <div className="relative w-48 h-48 border-2 border-primary rounded-lg">
-                          {/* Corner indicators */}
-                          <div className="absolute -top-1 -left-1 w-8 h-8 border-t-4 border-l-4 border-primary rounded-tl-lg"></div>
-                          <div className="absolute -top-1 -right-1 w-8 h-8 border-t-4 border-r-4 border-primary rounded-tr-lg"></div>
-                          <div className="absolute -bottom-1 -left-1 w-8 h-8 border-b-4 border-l-4 border-primary rounded-bl-lg"></div>
-                          <div className="absolute -bottom-1 -right-1 w-8 h-8 border-b-4 border-r-4 border-primary rounded-br-lg"></div>
-
-                          {/* Animated scanning line */}
-                          <div className="absolute inset-0 overflow-hidden rounded-lg">
-                            <div className="absolute top-0 left-0 right-0 h-0.5 bg-primary animate-pulse"></div>
-                            <div
-                              className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary to-transparent animate-bounce"
-                              style={{ animationDuration: "2s" }}
-                            ></div>
-                          </div>
-
-                          {/* Center crosshair */}
-                          <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
-                            <div className="w-6 h-0.5 bg-primary/60"></div>
-                            <div className="w-0.5 h-6 bg-primary/60 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2"></div>
-                          </div>
-                        </div>
-
-                        {/* Instructions */}
-                        <div className="absolute bottom-4 left-0 right-0 text-center">
-                          <p className="text-white text-sm font-medium bg-black/50 px-3 py-1 rounded-full inline-block">
-                            Position QR code within the frame
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-
-                    <Button onClick={stopScanning} variant="outline" className="w-full bg-transparent" size="lg">
-                      <X className="w-4 h-4 mr-2" />
-                      Stop Scanning
-                    </Button>
-                  </div>
-                )}
+                <div
+                  className="relative border-2 border-dashed border-muted-foreground/25 rounded-lg p-8 text-center hover:border-primary/50 transition-colors"
+                  onDragOver={handleDragOver}
+                  onDrop={handleDrop}
+                >
+                  <FileImage className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground mb-4">Drag and drop an image here, or click to select</p>
+                  <Button variant="outline" className="w-full bg-transparent" size="lg" asChild>
+                    <label className="cursor-pointer">
+                      <Upload className="w-4 h-4 mr-2" />
+                      Upload Image
+                      <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
+                    </label>
+                  </Button>
+                </div>
 
                 {scannedResult && (
                   <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
@@ -936,7 +826,7 @@ export default function QRGenerator() {
                 )}
 
                 <p className="text-xs text-muted-foreground text-center">
-                  Scan QR codes with camera or upload an image
+                  Upload images containing QR codes for instant scanning and action
                 </p>
               </CardContent>
             </Card>
