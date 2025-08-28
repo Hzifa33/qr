@@ -1,6 +1,7 @@
 "use client"
 
 import type React from "react"
+import jsQR from "jsqr"
 
 import { useState, useRef, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -32,7 +33,6 @@ import {
   FileImage,
 } from "lucide-react"
 import QRCode from "qrcode"
-import jsQR from "jsqr"
 
 interface QRStyle {
   id: string
@@ -281,15 +281,260 @@ export default function QRGenerator() {
     link.click()
   }
 
-  const detectQRFromImageData = (imageData: ImageData): string | null => {
+  const downloadSVG = async () => {
+    let dataToEncode = ""
+
+    switch (qrType) {
+      case "url":
+        dataToEncode = qrData
+        break
+      case "wifi":
+        dataToEncode = `WIFI:T:${wifiData.security};S:${wifiData.ssid};P:${wifiData.password};;`
+        break
+      case "vcard":
+        dataToEncode = `BEGIN:VCARD\nVERSION:3.0\nFN:${vcardData.firstName} ${vcardData.lastName}\nORG:${vcardData.company}\nTEL:${vcardData.phone}\nEMAIL:${vcardData.email}\nADR:${vcardData.address}\nEND:VCARD`
+        break
+      case "email":
+        dataToEncode = `mailto:${emailData.to}?subject=${encodeURIComponent(emailData.subject)}&body=${encodeURIComponent(emailData.body)}`
+        break
+      case "sms":
+        dataToEncode = `sms:${smsData.phone}?body=${encodeURIComponent(smsData.message)}`
+        break
+      case "social":
+        const socialUrls = {
+          instagram: `https://instagram.com/${socialData.username}`,
+          twitter: `https://twitter.com/${socialData.username}`,
+          facebook: `https://facebook.com/${socialData.username}`,
+          linkedin: `https://linkedin.com/in/${socialData.username}`,
+          tiktok: `https://tiktok.com/@${socialData.username}`,
+          youtube: `https://youtube.com/@${socialData.username}`,
+        }
+        dataToEncode = socialUrls[socialData.platform as keyof typeof socialUrls] || ""
+        break
+      default:
+        dataToEncode = qrData
+    }
+
+    if (!dataToEncode.trim()) return
+
     try {
-      const code = jsQR(imageData.data, imageData.width, imageData.height, {
-        inversionAttempts: "dontInvert",
-      })
-      return code ? code.data : null
+      let darkColor = "#000000"
+      let lightColor = "#FFFFFF"
+
+      switch (qrStyle) {
+        case "minimal":
+          darkColor = "#000000"
+          lightColor = "#FFFFFF"
+          break
+        case "gradient":
+          darkColor = "#0891b2"
+          lightColor = "#FFFFFF"
+          break
+        case "artdeco":
+          darkColor = "#1e293b"
+          lightColor = "#f8fafc"
+          break
+        case "organic":
+          darkColor = "#059669"
+          lightColor = "#ecfdf5"
+          break
+        case "logo":
+          darkColor = "#7c3aed"
+          lightColor = "#faf5ff"
+          break
+        case "pixel":
+          darkColor = "#dc2626"
+          lightColor = "#fef2f2"
+          break
+      }
+
+      const options = {
+        errorCorrectionLevel: errorLevel as "L" | "M" | "Q" | "H",
+        type: "svg" as const,
+        margin: margin[0],
+        width: size[0],
+        color: {
+          dark: darkColor,
+          light: lightColor,
+        },
+      }
+
+      const svgString = await QRCode.toString(dataToEncode, options)
+      const blob = new Blob([svgString], { type: "image/svg+xml" })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement("a")
+      link.download = `qr-code-${Date.now()}.svg`
+      link.href = url
+      link.click()
+      URL.revokeObjectURL(url)
     } catch (error) {
-      console.error("QR detection error:", error)
-      return null
+      console.error("Error generating SVG:", error)
+    }
+  }
+
+  const downloadPDF = () => {
+    if (!qrCode) return
+
+    try {
+      // Create a new canvas for PDF generation
+      const canvas = document.createElement("canvas")
+      const ctx = canvas.getContext("2d")
+      if (!ctx) return
+
+      const img = new Image()
+      img.onload = () => {
+        // Set canvas size for high-quality PDF (A4 proportions)
+        const pdfWidth = 595 // A4 width in points
+        const pdfHeight = 842 // A4 height in points
+        const qrSize = Math.min(pdfWidth, pdfHeight) * 0.6 // 60% of page size
+
+        canvas.width = pdfWidth
+        canvas.height = pdfHeight
+
+        // Fill white background
+        ctx.fillStyle = "#FFFFFF"
+        ctx.fillRect(0, 0, pdfWidth, pdfHeight)
+
+        // Center the QR code
+        const x = (pdfWidth - qrSize) / 2
+        const y = (pdfHeight - qrSize) / 2
+
+        ctx.drawImage(img, x, y, qrSize, qrSize)
+
+        // Convert canvas to PDF-compatible data URL
+        const dataURL = canvas.toDataURL("image/jpeg", 0.95)
+
+        // Create simple PDF content
+        const pdfContent = `%PDF-1.4
+1 0 obj
+<<
+/Type /Catalog
+/Pages 2 0 R
+>>
+endobj
+
+2 0 obj
+<<
+/Type /Pages
+/Kids [3 0 R]
+/Count 1
+>>
+endobj
+
+3 0 obj
+<<
+/Type /Page
+/Parent 2 0 R
+/MediaBox [0 0 ${pdfWidth} ${pdfHeight}]
+/Contents 4 0 R
+/Resources <<
+  /XObject <<
+    /Im1 5 0 R
+  >>
+>>
+>>
+endobj
+
+4 0 obj
+<<
+/Length 44
+>>
+stream
+q
+${qrSize} 0 0 ${qrSize} ${x} ${y} cm
+/Im1 Do
+Q
+endstream
+endobj
+
+5 0 obj
+<<
+/Type /XObject
+/Subtype /Image
+/Width ${size[0]}
+/Height ${size[0]}
+/ColorSpace /DeviceRGB
+/BitsPerComponent 8
+/Filter /DCTDecode
+/Length ${dataURL.length}
+>>
+stream
+${dataURL}
+endstream
+endobj
+
+xref
+0 6
+0000000000 65535 f 
+0000000010 00000 n 
+0000000079 00000 n 
+0000000173 00000 n 
+0000000301 00000 n 
+0000000380 00000 n 
+trailer
+<<
+/Size 6
+/Root 1 0 R
+>>
+startxref
+${500 + dataURL.length}
+%%EOF`
+
+        // For simplicity, we'll use the canvas approach to create a downloadable image in PDF format
+        // This creates a high-quality image that can be used in PDF workflows
+        const link = document.createElement("a")
+        link.download = `qr-code-${Date.now()}.pdf`
+
+        // Convert canvas to blob and create PDF-like download
+        canvas.toBlob(
+          (blob) => {
+            if (blob) {
+              // Create a simple PDF wrapper (this is a simplified approach)
+              const url = URL.createObjectURL(blob)
+
+              // For a proper PDF, we'll create a data URL that browsers can handle
+              const pdfDataUrl = canvas.toDataURL("image/png")
+
+              // Create a simple HTML page that can be printed as PDF
+              const htmlContent = `
+              <!DOCTYPE html>
+              <html>
+              <head>
+                <title>QR Code</title>
+                <style>
+                  body { margin: 0; padding: 20px; text-align: center; }
+                  img { max-width: 100%; height: auto; }
+                  @media print { body { margin: 0; } }
+                </style>
+              </head>
+              <body>
+                <img src="${pdfDataUrl}" alt="QR Code" />
+              </body>
+              </html>
+            `
+
+              const htmlBlob = new Blob([htmlContent], { type: "text/html" })
+              const htmlUrl = URL.createObjectURL(htmlBlob)
+
+              // Open in new window for PDF printing/saving
+              const newWindow = window.open(htmlUrl, "_blank")
+              if (newWindow) {
+                newWindow.onload = () => {
+                  setTimeout(() => {
+                    newWindow.print()
+                    URL.revokeObjectURL(htmlUrl)
+                  }, 500)
+                }
+              }
+            }
+          },
+          "image/png",
+          0.95,
+        )
+      }
+      img.src = qrCode
+    } catch (error) {
+      console.error("Error generating PDF:", error)
     }
   }
 
@@ -454,6 +699,11 @@ export default function QRGenerator() {
     } catch (error) {
       console.error("Error handling QR action:", error)
     }
+  }
+
+  const detectQRFromImageData = (imageData: ImageData) => {
+    const code = jsQR(imageData.data, imageData.width, imageData.height)
+    return code ? code.data : null
   }
 
   useEffect(() => {
@@ -774,10 +1024,10 @@ export default function QRGenerator() {
                     </Button>
 
                     <div className="grid grid-cols-2 gap-2">
-                      <Button variant="outline" size="sm">
+                      <Button variant="outline" size="sm" onClick={downloadSVG}>
                         SVG
                       </Button>
-                      <Button variant="outline" size="sm">
+                      <Button variant="outline" size="sm" onClick={downloadPDF}>
                         PDF
                       </Button>
                     </div>
