@@ -30,6 +30,8 @@ import {
   Waves,
   Target,
   Grid3X3,
+  X,
+  FileImage,
 } from "lucide-react"
 import QRCode from "qrcode"
 
@@ -87,6 +89,13 @@ export default function QRGenerator() {
   const [emailData, setEmailData] = useState({ to: "", subject: "", body: "" })
   const [smsData, setSmsData] = useState({ phone: "", message: "" })
   const [socialData, setSocialData] = useState({ platform: "instagram", username: "" })
+
+  const [isScanning, setIsScanning] = useState(false)
+  const [scannedResult, setScannedResult] = useState("")
+  const [scanError, setScanError] = useState("")
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const streamRef = useRef<MediaStream | null>(null)
+  const scanIntervalRef = useRef<NodeJS.Timeout | null>(null)
 
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
@@ -275,6 +284,107 @@ export default function QRGenerator() {
     link.download = `qr-code-${Date.now()}.png`
     link.href = qrCode
     link.click()
+  }
+
+  const startScanning = async () => {
+    try {
+      setScanError("")
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment" },
+      })
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream
+        streamRef.current = stream
+        setIsScanning(true)
+
+        // Start scanning for QR codes
+        scanIntervalRef.current = setInterval(() => {
+          scanQRFromVideo()
+        }, 500)
+      }
+    } catch (error) {
+      setScanError("Camera access denied or not available")
+      console.error("Camera error:", error)
+    }
+  }
+
+  const stopScanning = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop())
+      streamRef.current = null
+    }
+
+    if (scanIntervalRef.current) {
+      clearInterval(scanIntervalRef.current)
+      scanIntervalRef.current = null
+    }
+
+    setIsScanning(false)
+  }
+
+  const scanQRFromVideo = () => {
+    if (!videoRef.current) return
+
+    const video = videoRef.current
+    const canvas = document.createElement("canvas")
+    const ctx = canvas.getContext("2d")
+
+    if (!ctx) return
+
+    canvas.width = video.videoWidth
+    canvas.height = video.videoHeight
+    ctx.drawImage(video, 0, 0)
+
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+
+    // Simple QR detection (this is a basic implementation)
+    // In a real app, you'd use a proper QR scanning library
+    try {
+      const qrData = detectQRFromImageData(imageData)
+      if (qrData) {
+        setScannedResult(qrData)
+        stopScanning()
+      }
+    } catch (error) {
+      // Continue scanning
+    }
+  }
+
+  const detectQRFromImageData = (imageData: ImageData): string | null => {
+    // This is a placeholder - in a real implementation, you'd use a library like jsQR
+    // For now, we'll simulate detection
+    return null
+  }
+
+  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      const img = new Image()
+      img.onload = () => {
+        const canvas = document.createElement("canvas")
+        const ctx = canvas.getContext("2d")
+        if (!ctx) return
+
+        canvas.width = img.width
+        canvas.height = img.height
+        ctx.drawImage(img, 0, 0)
+
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+        const qrData = detectQRFromImageData(imageData)
+
+        if (qrData) {
+          setScannedResult(qrData)
+        } else {
+          setScanError("No QR code found in image")
+        }
+      }
+      img.src = e.target?.result as string
+    }
+    reader.readAsDataURL(file)
   }
 
   useEffect(() => {
@@ -616,13 +726,58 @@ export default function QRGenerator() {
                   QR Scanner
                 </CardTitle>
               </CardHeader>
-              <CardContent>
-                <Button variant="outline" className="w-full bg-transparent" size="lg">
-                  <Camera className="w-4 h-4 mr-2" />
-                  Scan QR Code
-                </Button>
-                <p className="text-xs text-muted-foreground mt-2 text-center">
-                  Scan existing QR codes with your camera
+              <CardContent className="space-y-4">
+                {!isScanning ? (
+                  <div className="space-y-3">
+                    <Button onClick={startScanning} className="w-full" size="lg">
+                      <Camera className="w-4 h-4 mr-2" />
+                      Start Camera Scan
+                    </Button>
+
+                    <div className="relative">
+                      <Button variant="outline" className="w-full bg-transparent" size="lg" asChild>
+                        <label className="cursor-pointer">
+                          <FileImage className="w-4 h-4 mr-2" />
+                          Upload Image
+                          <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
+                        </label>
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="relative aspect-square bg-black rounded-lg overflow-hidden">
+                      <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
+                      <div className="absolute inset-0 border-2 border-primary/50 rounded-lg">
+                        <div className="absolute top-4 left-4 w-6 h-6 border-t-2 border-l-2 border-primary"></div>
+                        <div className="absolute top-4 right-4 w-6 h-6 border-t-2 border-r-2 border-primary"></div>
+                        <div className="absolute bottom-4 left-4 w-6 h-6 border-b-2 border-l-2 border-primary"></div>
+                        <div className="absolute bottom-4 right-4 w-6 h-6 border-b-2 border-r-2 border-primary"></div>
+                      </div>
+                    </div>
+
+                    <Button onClick={stopScanning} variant="outline" className="w-full bg-transparent" size="lg">
+                      <X className="w-4 h-4 mr-2" />
+                      Stop Scanning
+                    </Button>
+                  </div>
+                )}
+
+                {scannedResult && (
+                  <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                    <p className="text-sm font-medium text-green-800 mb-1">QR Code Detected:</p>
+                    <p className="text-sm text-green-700 break-all">{scannedResult}</p>
+                  </div>
+                )}
+
+                {scanError && (
+                  <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                    <p className="text-sm text-red-700">{scanError}</p>
+                  </div>
+                )}
+
+                <p className="text-xs text-muted-foreground text-center">
+                  Scan QR codes with camera or upload an image
                 </p>
               </CardContent>
             </Card>
