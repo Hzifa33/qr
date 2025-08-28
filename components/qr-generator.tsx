@@ -865,13 +865,53 @@ export default function QRGenerator() {
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    <div className="relative aspect-square bg-black rounded-lg overflow-hidden">
-                      <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
-                      <div className="absolute inset-0 border-2 border-primary/50 rounded-lg">
-                        <div className="absolute top-4 left-4 w-6 h-6 border-t-2 border-l-2 border-primary"></div>
-                        <div className="absolute top-4 right-4 w-6 h-6 border-t-2 border-r-2 border-primary"></div>
-                        <div className="absolute bottom-4 left-4 w-6 h-6 border-b-2 border-l-2 border-primary"></div>
-                        <div className="absolute bottom-4 right-4 w-6 h-6 border-b-2 border-r-2 border-primary"></div>
+                    <div className="relative aspect-square bg-black rounded-lg overflow-hidden border-2 border-primary/20">
+                      <video
+                        ref={videoRef}
+                        autoPlay
+                        playsInline
+                        muted
+                        className="w-full h-full object-cover"
+                        style={{ transform: "scaleX(-1)" }} // Mirror the video for better UX
+                      />
+
+                      {/* Scanning overlay with animated frame */}
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        {/* Dark overlay with transparent center */}
+                        <div className="absolute inset-0 bg-black/40">
+                          <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-48 h-48 bg-transparent border-2 border-transparent"></div>
+                        </div>
+
+                        {/* Scanning frame */}
+                        <div className="relative w-48 h-48 border-2 border-primary rounded-lg">
+                          {/* Corner indicators */}
+                          <div className="absolute -top-1 -left-1 w-8 h-8 border-t-4 border-l-4 border-primary rounded-tl-lg"></div>
+                          <div className="absolute -top-1 -right-1 w-8 h-8 border-t-4 border-r-4 border-primary rounded-tr-lg"></div>
+                          <div className="absolute -bottom-1 -left-1 w-8 h-8 border-b-4 border-l-4 border-primary rounded-bl-lg"></div>
+                          <div className="absolute -bottom-1 -right-1 w-8 h-8 border-b-4 border-r-4 border-primary rounded-br-lg"></div>
+
+                          {/* Animated scanning line */}
+                          <div className="absolute inset-0 overflow-hidden rounded-lg">
+                            <div className="absolute top-0 left-0 right-0 h-0.5 bg-primary animate-pulse"></div>
+                            <div
+                              className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary to-transparent animate-bounce"
+                              style={{ animationDuration: "2s" }}
+                            ></div>
+                          </div>
+
+                          {/* Center crosshair */}
+                          <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
+                            <div className="w-6 h-0.5 bg-primary/60"></div>
+                            <div className="w-0.5 h-6 bg-primary/60 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2"></div>
+                          </div>
+                        </div>
+
+                        {/* Instructions */}
+                        <div className="absolute bottom-4 left-0 right-0 text-center">
+                          <p className="text-white text-sm font-medium bg-black/50 px-3 py-1 rounded-full inline-block">
+                            Position QR code within the frame
+                          </p>
+                        </div>
                       </div>
                     </div>
 
