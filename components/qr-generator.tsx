@@ -339,12 +339,11 @@ export default function QRGenerator() {
 
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
 
-    // Simple QR detection (this is a basic implementation)
-    // In a real app, you'd use a proper QR scanning library
     try {
       const qrData = detectQRFromImageData(imageData)
       if (qrData) {
         setScannedResult(qrData)
+        handleQRAction(qrData)
         stopScanning()
       }
     } catch (error) {
@@ -385,6 +384,7 @@ export default function QRGenerator() {
 
         if (qrData) {
           setScannedResult(qrData)
+          handleQRAction(qrData)
         } else {
           setScanError("No QR code found in image")
         }
@@ -392,6 +392,118 @@ export default function QRGenerator() {
       img.src = e.target?.result as string
     }
     reader.readAsDataURL(file)
+  }
+
+  const handleQRAction = (qrData: string) => {
+    try {
+      // WiFi QR Code
+      if (qrData.startsWith("WIFI:")) {
+        const wifiMatch = qrData.match(/WIFI:T:([^;]*);S:([^;]*);P:([^;]*);/)
+        if (wifiMatch) {
+          const [, security, ssid, password] = wifiMatch
+          // For mobile devices, try to open WiFi settings
+          if (/Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
+            // Android WiFi intent
+            if (/Android/i.test(navigator.userAgent)) {
+              window.location.href = `intent://wifi#Intent;scheme=wifi;package=com.android.settings;S.ssid=${encodeURIComponent(ssid)};S.password=${encodeURIComponent(password)};end`
+            }
+          } else {
+            // Desktop: Show WiFi details
+            alert(`WiFi Network: ${ssid}\nPassword: ${password}\nSecurity: ${security}`)
+          }
+        }
+        return
+      }
+
+      // Email QR Code
+      if (qrData.startsWith("mailto:")) {
+        window.location.href = qrData
+        return
+      }
+
+      // SMS QR Code
+      if (qrData.startsWith("sms:")) {
+        window.location.href = qrData
+        return
+      }
+
+      // Phone QR Code
+      if (qrData.startsWith("tel:")) {
+        window.location.href = qrData
+        return
+      }
+
+      // vCard QR Code
+      if (qrData.startsWith("BEGIN:VCARD")) {
+        // Create a blob and download the vCard
+        const blob = new Blob([qrData], { type: "text/vcard" })
+        const url = URL.createObjectURL(blob)
+        const link = document.createElement("a")
+        link.href = url
+        link.download = "contact.vcf"
+        link.click()
+        URL.revokeObjectURL(url)
+        return
+      }
+
+      // Geo location QR Code
+      if (qrData.startsWith("geo:")) {
+        const geoMatch = qrData.match(/geo:([^,]+),([^,?]+)/)
+        if (geoMatch) {
+          const [, lat, lng] = geoMatch
+          // Open in maps application
+          if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+            window.location.href = `maps://maps.google.com/maps?q=${lat},${lng}`
+          } else {
+            window.location.href = `https://maps.google.com/maps?q=${lat},${lng}`
+          }
+        }
+        return
+      }
+
+      // URL QR Code (HTTP/HTTPS)
+      if (qrData.startsWith("http://") || qrData.startsWith("https://")) {
+        window.open(qrData, "_blank")
+        return
+      }
+
+      // Calendar event QR Code
+      if (qrData.startsWith("BEGIN:VEVENT")) {
+        // Create a blob and download the calendar event
+        const blob = new Blob([qrData], { type: "text/calendar" })
+        const url = URL.createObjectURL(blob)
+        const link = document.createElement("a")
+        link.href = url
+        link.download = "event.ics"
+        link.click()
+        URL.revokeObjectURL(url)
+        return
+      }
+
+      // Social media or other URLs
+      if (
+        qrData.includes("instagram.com") ||
+        qrData.includes("twitter.com") ||
+        qrData.includes("facebook.com") ||
+        qrData.includes("linkedin.com") ||
+        qrData.includes("tiktok.com") ||
+        qrData.includes("youtube.com")
+      ) {
+        window.open(qrData, "_blank")
+        return
+      }
+
+      // Default: if it looks like a URL, open it
+      try {
+        new URL(qrData)
+        window.open(qrData, "_blank")
+      } catch {
+        // Not a valid URL, just display the result
+        console.log("QR Code content:", qrData)
+      }
+    } catch (error) {
+      console.error("Error handling QR action:", error)
+    }
   }
 
   useEffect(() => {
