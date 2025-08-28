@@ -34,6 +34,7 @@ import {
   FileImage,
 } from "lucide-react"
 import QRCode from "qrcode"
+import jsQR from "jsqr"
 
 interface QRStyle {
   id: string
@@ -352,9 +353,15 @@ export default function QRGenerator() {
   }
 
   const detectQRFromImageData = (imageData: ImageData): string | null => {
-    // This is a placeholder - in a real implementation, you'd use a library like jsQR
-    // For now, we'll simulate detection
-    return null
+    try {
+      const code = jsQR(imageData.data, imageData.width, imageData.height, {
+        inversionAttempts: "dontInvert",
+      })
+      return code ? code.data : null
+    } catch (error) {
+      console.error("QR detection error:", error)
+      return null
+    }
   }
 
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
